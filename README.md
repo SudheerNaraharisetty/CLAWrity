@@ -165,7 +165,6 @@ CLAWrity/
 │       └── audhd-default.md # AuDHD combined profile
 ├── assets/
 │   └── companion.png        # Default companion reference image
-├── .env.example             # Environment variable template
 ├── package.json
 ├── CLAUDE.md                # Project conventions
 └── README.md
