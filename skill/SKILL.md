@@ -71,9 +71,9 @@ Users may override this with their own image via `openclaw.json`:
 
 ## Quick Reference
 
-### Required Environment Variables
+### Environment Variables
 ```bash
-FAL_KEY=your_fal_api_key                    # Get from https://fal.ai/dashboard/keys
+FAL_KEY=your_fal_api_key                    # Optional: Get from https://fal.ai/dashboard/keys (text-only mode if not set)
 OPENCLAW_GATEWAY_TOKEN=your_token            # From: openclaw doctor --generate-gateway-token
 CLAWRITY_COMPANION_IMAGE=custom_url          # Optional: override default companion image
 ```
@@ -275,8 +275,10 @@ curl -X POST "http://localhost:18789/message" \
 # Detect mode, generate companion visual, and send support via OpenClaw
 
 if [ -z "$FAL_KEY" ]; then
-  echo "Error: FAL_KEY environment variable not set"
-  exit 1
+  echo "[CLAWrity] FAL_KEY not set — running in text-only mode (no image generation)"
+  IMAGE_GENERATION=false
+else
+  IMAGE_GENERATION=true
 fi
 
 COMPANION_IMAGE="${CLAWRITY_COMPANION_IMAGE:-https://cdn.jsdelivr.net/gh/SudheerNaraharisetty/CLAWrity@main/assets/companion.png}"
@@ -343,34 +345,47 @@ esac
 echo "Mode: $MODE"
 echo "Editing companion image with prompt: $EDIT_PROMPT"
 
-# Generate visual via fal.ai
-JSON_PAYLOAD=$(jq -n \
-  --arg image_url "$COMPANION_IMAGE" \
-  --arg prompt "$EDIT_PROMPT" \
-  '{image_url: $image_url, prompt: $prompt, num_images: 1, output_format: "jpeg"}')
+# Generate visual via fal.ai (only if FAL_KEY is set)
+if [ "$IMAGE_GENERATION" = true ]; then
+  JSON_PAYLOAD=$(jq -n \
+    --arg image_url "$COMPANION_IMAGE" \
+    --arg prompt "$EDIT_PROMPT" \
+    '{image_url: $image_url, prompt: $prompt, num_images: 1, output_format: "jpeg"}')
 
-RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image/edit" \
-  -H "Authorization: Key $FAL_KEY" \
-  -H "Content-Type: application/json" \
-  -d "$JSON_PAYLOAD")
+  RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image/edit" \
+    -H "Authorization: Key $FAL_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$JSON_PAYLOAD")
 
-IMAGE_URL=$(echo "$RESPONSE" | jq -r '.images[0].url')
+  IMAGE_URL=$(echo "$RESPONSE" | jq -r '.images[0].url')
 
-if [ "$IMAGE_URL" == "null" ] || [ -z "$IMAGE_URL" ]; then
-  echo "Error: Failed to generate image"
-  echo "Response: $RESPONSE"
-  exit 1
+  if [ "$IMAGE_URL" == "null" ] || [ -z "$IMAGE_URL" ]; then
+    echo "Error: Failed to generate image"
+    echo "Response: $RESPONSE"
+    exit 1
+  fi
+
+  echo "Image generated: $IMAGE_URL"
+else
+  IMAGE_URL=""
+  echo "Skipping image generation (text-only mode)"
 fi
 
-echo "Image generated: $IMAGE_URL"
 echo "Sending to channel: $CHANNEL"
 
 # Send via OpenClaw
-openclaw message send \
-  --action send \
-  --channel "$CHANNEL" \
-  --message "$CAPTION" \
-  --media "$IMAGE_URL"
+if [ -n "$IMAGE_URL" ]; then
+  openclaw message send \
+    --action send \
+    --channel "$CHANNEL" \
+    --message "$CAPTION" \
+    --media "$IMAGE_URL"
+else
+  openclaw message send \
+    --action send \
+    --channel "$CHANNEL" \
+    --message "$CAPTION"
+fi
 
 echo "Done!"
 ```
@@ -540,7 +555,7 @@ openclaw gateway start
 
 ## Error Handling
 
-- **FAL_KEY missing**: Ensure the API key is set in environment or `openclaw.json`
+- **FAL_KEY missing**: CLAWrity runs in text-only mode (no image generation) — set the key in `openclaw.json` to enable visuals
 - **Image generation failed**: Check prompt content and fal.ai API quota
 - **OpenClaw send failed**: Verify gateway is running (`openclaw gateway start`) and channel exists
 - **Rate limits**: fal.ai has rate limits; the agent should implement retry logic if needed
