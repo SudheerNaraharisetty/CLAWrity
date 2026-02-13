@@ -31,3 +31,6 @@ npm-debug.log*
 
 # Claude Code
 .claude/
+
+# Local notes
+*.local.md
