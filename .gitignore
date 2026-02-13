@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# npm
+*.tgz
+npm-debug.log*
+
+# TypeScript
+*.js.map
+*.d.ts
+!bin/cli.js
+
+# Claude Code
+.claude/

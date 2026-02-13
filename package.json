@@ -1,0 +1,50 @@
+{
+    "name": "clawrity",
+    "version": "0.1.0",
+    "description": "An OpenClaw skill for ADHD & Autism support — body doubling, task decomposition, sensory breaks, social scripting, and more",
+    "bin": {
+        "clawrity": "./bin/cli.js"
+    },
+    "files": [
+        "bin/",
+        "skill/",
+        "templates/",
+        "scripts/",
+        "assets/"
+    ],
+    "keywords": [
+        "openclaw",
+        "adhd",
+        "autism",
+        "neurodivergent",
+        "audhd",
+        "body-doubling",
+        "executive-function",
+        "sensory",
+        "ai-agent",
+        "companion",
+        "accessibility",
+        "mental-health",
+        "grok-imagine",
+        "fal-ai",
+        "image-generation",
+        "messaging"
+    ],
+    "author": "Sai Sudheer Naraharisetty",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SudheerNaraharisetty/CLAWrity"
+    },
+    "homepage": "https://github.com/SudheerNaraharisetty/CLAWrity#readme",
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "@fal-ai/client": "^1.2.0",
+        "@types/node": "^22.0.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.7.0"
+    }
+}
