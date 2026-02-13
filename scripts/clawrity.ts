@@ -44,9 +44,10 @@ interface FalApiResponse {
 
 interface SupportResult {
     mode: SupportMode;
-    imageUrl: string;
+    imageUrl: string | null;
     caption: string;
     channel: string;
+    hasImage: boolean;
     status: "sent" | "generated";
 }
 
@@ -151,12 +152,16 @@ export function getCaption(mode: SupportMode): string {
 async function generateVisual(
     prompt: string,
     companionImage: string
-): Promise<string> {
+): Promise<string | null> {
     const falKey = process.env.FAL_KEY;
     if (!falKey) {
-        throw new Error(
-            "FAL_KEY environment variable is not set. Get your key at https://fal.ai/dashboard/keys"
+        console.log(
+            "[CLAWrity] FAL_KEY not set — running in text-only mode (no image generation)"
         );
+        console.log(
+            "[CLAWrity] Get a key at: https://fal.ai/dashboard/keys to enable visuals"
+        );
+        return null;
     }
 
     // Try using @fal-ai/client first, fall back to fetch
@@ -217,11 +222,12 @@ async function generateVisual(
 async function sendViaOpenClaw(
     channel: string,
     message: string,
-    mediaUrl: string
+    mediaUrl: string | null
 ): Promise<void> {
     try {
+        const mediaFlag = mediaUrl ? ` --media "${mediaUrl}"` : "";
         await execAsync(
-            `openclaw message send --action send --channel "${channel}" --message "${message.replace(/"/g, '\\"')}" --media "${mediaUrl}"`
+            `openclaw message send --action send --channel "${channel}" --message "${message.replace(/"/g, '\\"')}"${mediaFlag}`
         );
     } catch {
         // Fallback to direct gateway API
@@ -234,18 +240,20 @@ async function sendViaOpenClaw(
 
         console.log("[CLAWrity] openclaw CLI not found, using direct API call");
 
+        const payload: Record<string, string> = {
+            action: "send",
+            channel,
+            message,
+        };
+        if (mediaUrl) payload.media = mediaUrl;
+
         const response = await fetch("http://localhost:18789/message", {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${gatewayToken}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                action: "send",
-                channel,
-                message,
-                media: mediaUrl,
-            }),
+            body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -281,13 +289,13 @@ export async function supportAndSend(
 
     console.log(`[CLAWrity] Mode: ${mode}`);
 
-    // Build prompt
+    // Build prompt and generate visual (if FAL_KEY is set)
     const prompt = buildPrompt(userContext, mode);
-    console.log(`[CLAWrity] Generating visual...`);
-
-    // Generate visual
     const imageUrl = await generateVisual(prompt, companionImage);
-    console.log(`[CLAWrity] Visual generated: ${imageUrl}`);
+
+    if (imageUrl) {
+        console.log(`[CLAWrity] Visual generated: ${imageUrl}`);
+    }
 
     // Get caption
     const caption = customCaption || getCaption(mode);
@@ -304,6 +312,7 @@ export async function supportAndSend(
         imageUrl,
         caption,
         channel,
+        hasImage: imageUrl !== null,
         status: skipSend ? "generated" : "sent",
     };
 }
