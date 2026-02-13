@@ -53,7 +53,7 @@ usage() {
   echo "  auto            Auto-detect mode from user context (default)"
   echo ""
   echo "Environment Variables:"
-  echo "  FAL_KEY                    Required. Your fal.ai API key"
+  echo "  FAL_KEY                    Optional. Your fal.ai API key (text-only mode if not set)"
   echo "  OPENCLAW_GATEWAY_TOKEN     Optional. Gateway token for direct API calls"
   echo "  CLAWRITY_COMPANION_IMAGE   Optional. Override default companion image URL"
   exit 0
@@ -64,9 +64,11 @@ usage() {
 # --------------------------------------------------------------------------
 validate_prereqs() {
   if [ -z "${FAL_KEY:-}" ]; then
-    log_error "FAL_KEY environment variable is not set."
-    log_error "Get your key at: https://fal.ai/dashboard/keys"
-    exit 1
+    log_warn "FAL_KEY not set — running in text-only mode (no image generation)"
+    log_warn "Get a key at: https://fal.ai/dashboard/keys to enable visuals"
+    IMAGE_GENERATION=false
+  else
+    IMAGE_GENERATION=true
   fi
 
   if ! command -v curl &> /dev/null; then
@@ -189,20 +191,35 @@ send_to_channel() {
 
   log_info "Sending to channel: $channel"
 
+  # Build send args based on whether we have an image
   if command -v openclaw &> /dev/null; then
-    openclaw message send \
-      --action send \
-      --channel "$channel" \
-      --message "$CAPTION" \
-      --media "$IMAGE_URL"
+    if [ -n "${IMAGE_URL:-}" ]; then
+      openclaw message send \
+        --action send \
+        --channel "$channel" \
+        --message "$CAPTION" \
+        --media "$IMAGE_URL"
+    else
+      openclaw message send \
+        --action send \
+        --channel "$channel" \
+        --message "$CAPTION"
+    fi
   elif [ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
     log_warn "openclaw CLI not found, using direct API call"
     local send_payload
-    send_payload=$(jq -n \
-      --arg channel "$channel" \
-      --arg message "$CAPTION" \
-      --arg media "$IMAGE_URL" \
-      '{action: "send", channel: $channel, message: $message, media: $media}')
+    if [ -n "${IMAGE_URL:-}" ]; then
+      send_payload=$(jq -n \
+        --arg channel "$channel" \
+        --arg message "$CAPTION" \
+        --arg media "$IMAGE_URL" \
+        '{action: "send", channel: $channel, message: $message, media: $media}')
+    else
+      send_payload=$(jq -n \
+        --arg channel "$channel" \
+        --arg message "$CAPTION" \
+        '{action: "send", channel: $channel, message: $message}')
+    fi
 
     curl -s -X POST "$GATEWAY_URL" \
       -H "Authorization: Bearer $OPENCLAW_GATEWAY_TOKEN" \
@@ -244,7 +261,14 @@ main() {
 
   log_info "Mode: $mode"
   build_prompt_and_caption "$mode" "$user_context" "$custom_caption"
-  generate_visual
+
+  if [ "$IMAGE_GENERATION" = true ]; then
+    generate_visual
+  else
+    IMAGE_URL=""
+    log_info "Skipping image generation (text-only mode)"
+  fi
+
   send_to_channel "$channel"
 
   log_success "Done! 🦞🧠"
@@ -252,10 +276,11 @@ main() {
   # Output structured result
   jq -n \
     --arg mode "$mode" \
-    --arg image_url "$IMAGE_URL" \
+    --arg image_url "${IMAGE_URL:-}" \
     --arg caption "$CAPTION" \
     --arg channel "$channel" \
-    '{mode: $mode, image_url: $image_url, caption: $caption, channel: $channel, status: "sent"}'
+    --argjson has_image "$IMAGE_GENERATION" \
+    '{mode: $mode, image_url: $image_url, caption: $caption, channel: $channel, has_image: $has_image, status: "sent"}'
 }
 
 main "$@"

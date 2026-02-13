@@ -34,7 +34,7 @@ That's it. The installer will walk you through setup.
 ## Prerequisites
 
 - **[OpenClaw](https://docs.openclaw.ai)** — installed and running
-- **[fal.ai](https://fal.ai)** — API key for image generation (Grok Imagine)
+- **[fal.ai](https://fal.ai)** — API key for image generation (optional — CLAWrity works in text-only mode without it)
 
 ---
 
@@ -165,6 +165,7 @@ CLAWrity/
 │       └── audhd-default.md # AuDHD combined profile
 ├── assets/
 │   └── companion.png        # Default companion reference image
+├── .env.example             # Environment variable template
 ├── package.json
 ├── CLAUDE.md                # Project conventions
 └── README.md
@@ -176,7 +177,7 @@ CLAWrity/
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `FAL_KEY` | Yes | fal.ai API key for Grok Imagine |
+| `FAL_KEY` | No | fal.ai API key for image generation (text-only mode if not set) |
 | `OPENCLAW_GATEWAY_TOKEN` | No | Gateway token (fallback if CLI unavailable) |
 | `CLAWRITY_COMPANION_IMAGE` | No | Override default companion image URL |
 

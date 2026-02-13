@@ -214,10 +214,11 @@ function checkPrerequisites() {
 // =========================================================================
 
 async function promptFalKey(rl) {
-    logStep(2, 7, "Setting up fal.ai API key");
+    logStep(2, 7, "Setting up fal.ai API key (optional)");
 
-    logInfo("CLAWrity uses fal.ai (Grok Imagine) for visual generation.");
-    logInfo("Get your key at: https://fal.ai/dashboard/keys\n");
+    logInfo("CLAWrity can generate companion visuals using fal.ai (Grok Imagine).");
+    logInfo("This is optional — CLAWrity works in text-only mode without it.");
+    logInfo("Get a key at: https://fal.ai/dashboard/keys\n");
 
     // Check if already set in environment
     if (process.env.FAL_KEY) {
@@ -225,15 +226,15 @@ async function promptFalKey(rl) {
         return process.env.FAL_KEY;
     }
 
-    const key = await ask(rl, "Enter your fal.ai API key:");
+    const key = await ask(rl, "Enter your fal.ai API key (or press Enter to skip):");
 
     if (!key) {
-        logWarn("No API key provided. You can set it later in openclaw.json.");
-        logInfo('Add to skills.entries.clawrity.env: { "FAL_KEY": "your_key" }');
+        logInfo("No API key provided — CLAWrity will run in text-only mode.");
+        logInfo("You can add it later in openclaw.json or your .env file.");
         return null;
     }
 
-    logSuccess("API key received");
+    logSuccess("API key received — image generation enabled");
     return key;
 }
 
@@ -404,7 +405,7 @@ function injectPersona(profileChoice) {
 // Step 7: Summary
 // =========================================================================
 
-function printSummary(profileChoice) {
+function printSummary(profileChoice, falKey) {
     logStep(7, 7, "Installation complete!");
 
     console.log(`
@@ -415,6 +416,7 @@ function printSummary(profileChoice) {
   ${GREEN}•${RESET} Companion persona → ${SOUL_FILE}
   ${GREEN}•${RESET} Configuration → ${CONFIG_FILE}
   ${GREEN}•${RESET} Profile: ${CYAN}${profileChoice.label}${RESET}
+  ${GREEN}•${RESET} Image generation: ${falKey ? `${GREEN}enabled${RESET}` : `${YELLOW}text-only (no FAL_KEY)${RESET}`}
 
   ${BOLD}Try these messages with your OpenClaw agent:${RESET}
 
@@ -481,7 +483,7 @@ async function main() {
         injectPersona(profileChoice);
 
         // Step 7: Summary
-        printSummary(profileChoice);
+        printSummary(profileChoice, falKey);
 
         rl.close();
     } catch (error) {
