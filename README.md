@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/CLAWrity_logo.jpeg" alt="CLAWrity Logo" width="100%">
+</div>
+
 # CLAWrity 🦞🧠
 
 > Your neurodivergent-friendly companion for OpenClaw.
