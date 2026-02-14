@@ -96,7 +96,38 @@ CLAWRITY_COMPANION_IMAGE=custom_url          # Optional: override default compan
 | how do I say, respond, email, awkward, phrase, social, reply | `social-script` |
 | did it, done, finished, completed, finally, accomplished | `celebration` |
 
-## Step-by-Step Instructions
+
+## Available Tools
+
+### [TOOL] run-clawrity
+Executes the CLAWrity logic to generate a supportive response and visual.
+**Usage**: CALL THIS TOOL when the user asks for support or uses keywords like "body double", "overwhelmed", "stuck", "celebrate". DO NOT narrate what you would do. RUN THE TOOL.
+
+**Arguments**:
+- `user_context` (string): The user's message or situation (e.g., "I can't start studying").
+- `channel` (string): The channel ID to send the response to (use the current channel).
+- `mode` (string, optional): specific mode if detected (body-double, task-decompose, etc).
+- `caption` (string, optional): A specific message to send, if you want to override the auto-generated one.
+
+**Command**:
+```bash
+bash scripts/clawrity.sh "$user_context" "$channel" "$mode" "$caption"
+```
+
+### [TOOL] start-body-double-timer
+Starts a background timer to send periodic check-ins.
+**Usage**: CALL THIS TOOL when the user asks for "periodic check-ins", "remind me every 15 mins", or "keep me on track".
+
+**Arguments**:
+- `channel` (string): The channel ID (use current).
+- `interval` (number, optional): Minutes between check-ins (default 15).
+
+**Command**:
+```bash
+# Start in background
+bash scripts/body-double-timer.sh "$channel" "$interval" &
+```
+
 
 ### Step 1: Collect User Input
 

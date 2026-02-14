@@ -25,7 +25,7 @@ const { execSync } = require("child_process");
 // Constants
 // =========================================================================
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.2";
 const SKILL_NAME = "clawrity";
 
 // OpenClaw workspace paths
@@ -342,6 +342,8 @@ function updateConfig(falKey, profileChoice) {
     // Write config
     writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
     logSuccess(`Configuration saved to: ${CONFIG_FILE}`);
+
+    return !!skillConfig.env.FAL_KEY;
 }
 
 // =========================================================================
@@ -405,7 +407,7 @@ function injectPersona(profileChoice) {
 // Step 7: Summary
 // =========================================================================
 
-function printSummary(profileChoice, falKey) {
+function printSummary(profileChoice, isImageGenEnabled) {
     logStep(7, 7, "Installation complete!");
 
     console.log(`
@@ -416,7 +418,7 @@ function printSummary(profileChoice, falKey) {
   ${GREEN}•${RESET} Companion persona → ${SOUL_FILE}
   ${GREEN}•${RESET} Configuration → ${CONFIG_FILE}
   ${GREEN}•${RESET} Profile: ${CYAN}${profileChoice.label}${RESET}
-  ${GREEN}•${RESET} Image generation: ${falKey ? `${GREEN}enabled${RESET}` : `${YELLOW}text-only (no FAL_KEY)${RESET}`}
+  ${GREEN}•${RESET} Image generation: ${isImageGenEnabled ? `${GREEN}enabled${RESET}` : `${YELLOW}text-only (no FAL_KEY)${RESET}`}
 
   ${BOLD}Try these messages with your OpenClaw agent:${RESET}
 
@@ -477,13 +479,13 @@ async function main() {
         copySkillFiles();
 
         // Step 5: Config
-        updateConfig(falKey, profileChoice);
+        const isImageGenEnabled = updateConfig(falKey, profileChoice);
 
         // Step 6: Persona injection
         injectPersona(profileChoice);
 
         // Step 7: Summary
-        printSummary(profileChoice, falKey);
+        printSummary(profileChoice, isImageGenEnabled);
 
         rl.close();
     } catch (error) {
