@@ -176,8 +176,8 @@ detect_mode_smart() {
       return ;;
   esac
   
-  # Layer 2: Emoji emotional signals
-  if echo "$context" | grep -qE '[😭😩🥺😤😰💔😫😣]'; then
+  # Layer 2: Emoji emotional signals (with fallback for systems without Unicode support)
+  if echo "$context" | grep -qE '[😭😩🥺😤😰💔😫😣]' 2>/dev/null; then
     # Distress detected
     if echo "$lowercase" | grep -qE 'work|task|study|start|do|focus|begin'; then
       echo "mode:body-double|triggers:emoji-distress-task"
@@ -191,8 +191,8 @@ detect_mode_smart() {
     fi
   fi
   
-  # Layer 3: Celebration emojis
-  if echo "$context" | grep -qE '[🎉✅💪🏆🎊😄😊🥳]'; then
+  # Layer 3: Celebration emojis (with fallback for systems without Unicode support)
+  if echo "$context" | grep -qE '[🎉✅💪🏆🎊😄😊🥳]' 2>/dev/null; then
     echo "mode:celebration|triggers:emoji-positive"
     return
   fi
