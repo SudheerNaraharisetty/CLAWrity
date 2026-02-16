@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ============================================================================
-# CLAWrity Support Script v0.1.3
+# CLAWrity Support Script v0.1.4
 # Dynamic companion responses, smart detection, memory integration
 # ============================================================================
 
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-VERSION="0.1.3"
+VERSION="0.1.4"
 DEFAULT_COMPANION="https://cdn.jsdelivr.net/gh/SudheerNaraharisetty/CLAWrity@main/assets/companion.png"
 FAL_API_URL="https://fal.run/xai/grok-imagine-image/edit"
 GATEWAY_URL="http://localhost:18789/message"

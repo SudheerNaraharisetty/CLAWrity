@@ -25,7 +25,7 @@ const { execSync } = require("child_process");
 // Constants
 // =========================================================================
 
-const VERSION = "0.1.3";
+const VERSION = "0.1.4";
 const SKILL_NAME = "clawrity";
 
 // OpenClaw workspace paths
@@ -335,10 +335,11 @@ function updateConfig(falKey, profileChoice) {
     skillConfig.enabled = true;
     // skillConfig.profile = profileChoice.value;
 
-    // Set environment variables
-    if (!skillConfig.env) skillConfig.env = {};
+    // Set environment variables - OpenClaw 2026.2.13+ requires global env for bash scripts
+    if (!config.env) config.env = {};
     if (falKey) {
-        skillConfig.env.FAL_KEY = falKey;
+        config.env.FAL_KEY = falKey;
+        logInfo("FAL_KEY set in global environment (OpenClaw compatible)");
     }
 
     // Ensure skills load path includes our skills directory (matches CLAWRA approach)
@@ -371,7 +372,7 @@ function updateConfig(falKey, profileChoice) {
     writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
     logSuccess(`Configuration saved to: ${CONFIG_FILE}`);
 
-    return !!skillConfig.env.FAL_KEY;
+    return !!(config.env && config.env.FAL_KEY);
 }
 
 // =========================================================================
