@@ -133,20 +133,17 @@ ensure_dir "$TEMP_DIR"
 ensure_dir "$MEMORY_DIR"
 
 # --------------------------------------------------------------------------
-# User Context Detection
+# Input Sanitization (Security)
 # --------------------------------------------------------------------------
-get_user_name() {
-  # Try to get from OpenClaw session or use generic
-  # OpenClaw stores session info that we can reference
-  local session_context="${SESSION_CONTEXT:-}"
-  
-  # Extract name from session if available
-  if [ -n "$session_context" ]; then
-    # Parse from session context (implementation depends on OpenClaw format)
-    echo "$session_context" | grep -oP '(?<=user_name=)[^&]+' || echo "friend"
-  else
-    echo "friend"
-  fi
+sanitize_context() {
+  local context="$1"
+  # Remove shell metacharacters to prevent command injection
+  context=$(echo "$context" | tr -d '`$(){}[];&|\|!*?#')
+  # Escape quotes
+  context=$(echo "$context" | sed 's/"/\\"/g')
+  # Limit length to prevent memory issues
+  [ ${#context} -gt 1000 ] && context="${context:0:1000}"
+  echo "$context"
 }
 
 # --------------------------------------------------------------------------
@@ -231,6 +228,9 @@ log_to_memory() {
   local detected_triggers="$3"
   local timestamp=$(date -Iseconds)
   
+  # Sanitize context for safe logging
+  context=$(sanitize_context "$context")
+  
   # Create memory entry
   local entry="- ${timestamp} | ${mode} | ${context}"
   [ -n "$detected_triggers" ] && entry="${entry} | ${detected_triggers}"
@@ -250,7 +250,7 @@ log_to_memory() {
 check_contextual_patterns() {
   local current_context="$1"
   local lowercase=$(echo "$current_context" | tr '[:upper:]' '[:lower:]')
-  local user_name=$(get_user_name)
+  local user_name="friend"
   
   # Check last 7 days of memory
   local recent_memory=""
@@ -338,7 +338,7 @@ select_response() {
 # Heartbeat Check-in Generation
 # --------------------------------------------------------------------------
 generate_checkin() {
-  local user_name=$(get_user_name)
+  local user_name="friend"
   local checkin_file="${TEMP_DIR}/checkin_history"
   
   # Get available checkins
@@ -375,7 +375,10 @@ build_prompt_and_caption() {
   local mode="$1"
   local context="$2"
   local custom_caption="$3"
-  local user_name=$(get_user_name)
+  local user_name="friend"
+  
+  # Sanitize context to prevent command injection
+  context=$(sanitize_context "$context")
   
   # Check for contextual patterns first
   local pattern_result=$(check_contextual_patterns "$context")
