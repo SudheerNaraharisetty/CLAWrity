@@ -2,17 +2,108 @@
 set -euo pipefail
 
 # ============================================================================
-# CLAWrity Support Script
-# Detect mode, generate companion visual, and send support via OpenClaw
+# CLAWrity Support Script v0.1.3
+# Dynamic companion responses, smart detection, memory integration
 # ============================================================================
 
 # --------------------------------------------------------------------------
 # Constants
 # --------------------------------------------------------------------------
-VERSION="0.1.0"
+VERSION="0.1.3"
 DEFAULT_COMPANION="https://cdn.jsdelivr.net/gh/SudheerNaraharisetty/CLAWrity@main/assets/companion.png"
 FAL_API_URL="https://fal.run/xai/grok-imagine-image/edit"
 GATEWAY_URL="http://localhost:18789/message"
+MEMORY_DIR="${OPENCLAW_DIR:-$HOME/.openclaw}/memory"
+TEMP_DIR="${TMPDIR:-/tmp}/clawrity"
+
+# --------------------------------------------------------------------------
+# Dynamic Response Pools (10+ variations per mode)
+# --------------------------------------------------------------------------
+BODY_DOUBLE_RESPONSES=(
+  "I'm right here with you 💛"
+  "Let's do this together 🦞"
+  "You're not alone"
+  "I'm staying with you"
+  "We've got this"
+  "Presence > pressure"
+  "Sitting with you now 🧠"
+  "No rush, no pressure"
+  "I'm here for this"
+  "Doing this with you"
+)
+
+TASK_DECOMPOSE_RESPONSES=(
+  "Here's your task broken into small, manageable pieces. Pick just one to start with 💛"
+  "One tiny step at a time 🦞"
+  "Small pieces, you've got this"
+  "Any one step counts 🧠"
+  "Start with the smallest piece"
+  "Breaking it down for you"
+  "One piece at a time 💛"
+  "Tiny steps lead to big wins"
+  "Pick the easiest first 🦞"
+  "You've got this, piece by piece"
+)
+
+TRANSITION_RESPONSES=(
+  "Let's gently move to the next thing. Take a breath first 💛"
+  "Transitions are hard and that's okay 🦞"
+  "One breath, then we move"
+  "Gentle shift to the next thing 🧠"
+  "You did great. Now we transition"
+  "Breath first, then move 💛"
+  "Transitions take energy - honor that"
+  "Ready when you are 🦞"
+  "Let's make the shift together"
+  "Gentle bridge to what's next"
+)
+
+SENSORY_BREAK_RESPONSES=(
+  "Everything can wait. Right now, just breathe. You're safe 🌿"
+  "Your nervous system needs this 💛"
+  "Grounding with you right now 🦞"
+  "Safe and calm together 🧠"
+  "Everything else can wait"
+  "Just breathe, I've got you 💛"
+  "Sensory rest is necessary"
+  "Quiet and calm right now 🌿"
+  "You're safe here 🦞"
+  "Rest is productive too"
+)
+
+SOCIAL_SCRIPT_RESPONSES=(
+  "Here are a few ways you could say that. Pick whichever feels most like you 💛"
+  "Some options for you 🦞"
+  "Find the words that feel right"
+  "Pick what feels authentic 🧠"
+  "Your voice matters - choose what fits"
+  "Options that honor your style 💛"
+  "Say it your way"
+  "Choose what feels comfortable 🦞"
+  "Words that work for you"
+  "Your authenticity matters most"
+)
+
+CELEBRATION_RESPONSES=(
+  "YES!! You did it! 🎉"
+  "I'm literally cheering rn! 🦞🧠"
+  "So proud of you!! 💛"
+  "That took real effort - amazing!"
+  "LOOK AT YOU GO! ✨"
+  "You showed up and did it! 🦞"
+  "Look at what you accomplished! 🧠"
+  "That's a win! 🎉"
+  "You crushed it! 💛"
+  "Proof that you can do hard things"
+)
+
+CHECKIN_RESPONSES=(
+  "Hey {name} 🦞 Just checking in - how are you doing?"
+  "Thinking of you, {name} 🧠 Wanted to see how you're feeling"
+  "Quick check in {name} 💛 What's your energy like right now?"
+  "Hey {name} 🦞🧠 How's it going?"
+  "Checking in, {name} 🦞 No pressure to reply, just here if you need me 💛"
+)
 
 # --------------------------------------------------------------------------
 # Colors & Logging
@@ -29,43 +120,331 @@ log_warn()    { echo -e "${YELLOW}[CLAWrity]${NC} $1"; }
 log_error()   { echo -e "${RED}[CLAWrity]${NC} $1" >&2; }
 
 # --------------------------------------------------------------------------
-# Usage
+# Setup
 # --------------------------------------------------------------------------
-usage() {
-  echo "CLAWrity Support v${VERSION}"
-  echo ""
-  echo "Usage: $0 <user_context> <channel> [mode] [caption]"
-  echo ""
-  echo "Arguments:"
-  echo "  user_context    Description of what the user needs (e.g., 'I can't start studying')"
-  echo "  channel         Target channel for sending (e.g., '#general', '@username')"
-  echo "  mode            Optional. One of: body-double, task-decompose, transition,"
-  echo "                  sensory-break, social-script, celebration, auto (default: auto)"
-  echo "  caption         Optional. Custom message to accompany the visual"
-  echo ""
-  echo "Modes:"
-  echo "  body-double     Co-working presence for task initiation"
-  echo "  task-decompose  Break overwhelming tasks into micro-steps"
-  echo "  transition      Help switching between activities"
-  echo "  sensory-break   Calming support during sensory overload"
-  echo "  social-script   Communication scripts for social situations"
-  echo "  celebration     Celebrate completed tasks and wins"
-  echo "  auto            Auto-detect mode from user context (default)"
-  echo ""
-  echo "Environment Variables:"
-  echo "  FAL_KEY                    Optional. Your fal.ai API key (text-only mode if not set)"
-  echo "  OPENCLAW_GATEWAY_TOKEN     Optional. Gateway token for direct API calls"
-  echo "  CLAWRITY_COMPANION_IMAGE   Optional. Override default companion image URL"
-  exit 0
+ensure_dir() {
+  if [ ! -d "$1" ]; then
+    mkdir -p "$1"
+  fi
+}
+
+# Initialize temp directory
+ensure_dir "$TEMP_DIR"
+ensure_dir "$MEMORY_DIR"
+
+# --------------------------------------------------------------------------
+# Input Sanitization (Security)
+# --------------------------------------------------------------------------
+sanitize_context() {
+  local context="$1"
+  # Remove shell metacharacters to prevent command injection
+  context=$(echo "$context" | tr -d '`$(){}[];&|\|!*?#')
+  # Escape quotes
+  context=$(echo "$context" | sed 's/"/\\"/g')
+  # Limit length to prevent memory issues
+  [ ${#context} -gt 1000 ] && context="${context:0:1000}"
+  echo "$context"
 }
 
 # --------------------------------------------------------------------------
-# Validate Prerequisites
+# Smart Mode Detection (5 Layers)
+# --------------------------------------------------------------------------
+detect_mode_smart() {
+  local context="$1"
+  local lowercase=$(echo "$context" | tr '[:upper:]' '[:lower:]')
+  local triggers=""
+  
+  # Layer 1: Explicit keywords (high confidence)
+  case "$lowercase" in
+    *"body double"*|*"can't start"*|*"sit with me"*|*"work with me"*|*"co-work"*)
+      echo "mode:body-double|triggers:explicit"
+      return ;;
+    *"overwhelmed"*|*"break it down"*|*"too much"*|*"simplify"*|*"where to start"*)
+      echo "mode:task-decompose|triggers:explicit"
+      return ;;
+    *"finished"*|*"what's next"*|*"switch"*|*"move on"*|*"can't transition"*)
+      echo "mode:transition|triggers:explicit"
+      return ;;
+    *"overloaded"*|*"sensory"*|*"meltdown"*|*"calm down"*)
+      echo "mode:sensory-break|triggers:explicit"
+      return ;;
+    *"how do i say"*|*"respond to"*|*"awkward"*|*"help me email"*)
+      echo "mode:social-script|triggers:explicit"
+      return ;;
+    *"did it"*|*"done"*|*"finished"*|*"completed"*|*"accomplished"*)
+      echo "mode:celebration|triggers:explicit"
+      return ;;
+  esac
+  
+  # Layer 2: Emoji emotional signals (with fallback for systems without Unicode support)
+  if echo "$context" | grep -qE '[😭😩🥺😤😰💔😫😣]' 2>/dev/null; then
+    # Distress detected
+    if echo "$lowercase" | grep -qE 'work|task|study|start|do|focus|begin'; then
+      echo "mode:body-double|triggers:emoji-distress-task"
+      return
+    elif echo "$lowercase" | grep -qE 'loud|bright|noise|people|much|overwhelm|sensory'; then
+      echo "mode:sensory-break|triggers:emoji-distress-sensory"
+      return
+    else
+      echo "mode:body-double|triggers:emoji-distress-general"
+      return
+    fi
+  fi
+  
+  # Layer 3: Celebration emojis (with fallback for systems without Unicode support)
+  if echo "$context" | grep -qE '[🎉✅💪🏆🎊😄😊🥳]' 2>/dev/null; then
+    echo "mode:celebration|triggers:emoji-positive"
+    return
+  fi
+  
+  # Layer 4: Capitalization intensity
+  if echo "$context" | grep -qE '^[A-Z\s!]{15,}$'; then
+    # High emotional intensity
+    if echo "$lowercase" | grep -qE 'did|done|finished|complete|win|got|made'; then
+      echo "mode:celebration|triggers:all-caps-win"
+      return
+    else
+      echo "mode:body-double|triggers:all-caps-distress"
+      return
+    fi
+  fi
+  
+  # Layer 5: Indirect expressions (neurodivergent communication patterns)
+  if echo "$lowercase" | grep -qE 'ugh|stuck|hard|difficult|can.t|impossible|forever|never|always|why is this'; then
+    echo "mode:body-double|triggers:indirect-struggle"
+    return
+  fi
+  
+  # Default fallback
+  echo "mode:body-double|triggers:default"
+}
+
+# --------------------------------------------------------------------------
+# Memory Integration (OpenClaw Native)
+# --------------------------------------------------------------------------
+log_to_memory() {
+  local mode="$1"
+  local context="$2"
+  local detected_triggers="$3"
+  local timestamp=$(date -Iseconds)
+  
+  # Sanitize context for safe logging
+  context=$(sanitize_context "$context")
+  
+  # Create memory entry
+  local entry="- ${timestamp} | ${mode} | ${context}"
+  [ -n "$detected_triggers" ] && entry="${entry} | ${detected_triggers}"
+  
+  # Write to daily memory file
+  local memory_file="${MEMORY_DIR}/$(date +%Y-%m-%d).md"
+  echo "$entry" >> "$memory_file"
+  
+  # Update pattern file for quick lookup
+  if [ -n "$detected_triggers" ]; then
+    local pattern_file="${MEMORY_DIR}/patterns.md"
+    echo "$(date +%Y-%m-%d): ${detected_triggers} | ${context}" >> "$pattern_file"
+  fi
+}
+
+# Pattern Detection Examples
+check_contextual_patterns() {
+  local current_context="$1"
+  local lowercase=$(echo "$current_context" | tr '[:upper:]' '[:lower:]')
+  local user_name="friend"
+  
+  # Check last 7 days of memory
+  local recent_memory=""
+  if [ -d "$MEMORY_DIR" ]; then
+    recent_memory=$(find "$MEMORY_DIR" -name "*.md" -mtime -7 -size -100k -exec head -c 10000 {} \; 2>/dev/null || echo "")
+  fi
+  
+  # Pattern 1: Smoking + Study (as requested example)
+  if echo "$lowercase" | grep -qE 'study|work|focus|assignment|deadline|homework'; then
+    if echo "$recent_memory" | grep -i 'smok\|cigarette\|craving\|nicotine' | head -1 | grep -q '.'; then
+      # High-risk trigger: studying + previous smoking mention
+      echo "pattern:smoking-study|action:gentle-check-in"
+      return 0
+    fi
+  fi
+  
+  # Pattern 2: Late night anxiety (after 10pm + anxiety words)
+  local hour=$(date +%H)
+  if [ "$hour" -ge 22 ] || [ "$hour" -le 02 ]; then
+    if echo "$lowercase" | grep -qE 'anxious|worried|can.t sleep|racing'; then
+      if echo "$recent_memory" | grep -i 'night\|sleep\|anxious' | wc -l | grep -q '[3-9]\|10'; then
+        echo "pattern:late-night-anxiety|action:night-support"
+        return 0
+      fi
+    fi
+  fi
+  
+  # Pattern 3: Recurring task avoidance
+  if echo "$lowercase" | grep -qE 'avoid|putting off|keep delaying'; then
+    local task_avoidance_count=$(echo "$recent_memory" | grep -c 'body-double' 2>/dev/null || echo "0")
+    if [ "$task_avoidance_count" -gt 5 ]; then
+      echo "pattern:recurring-avoidance|action:gentle-accountability"
+      return 0
+    fi
+  fi
+  
+  return 1
+}
+
+# --------------------------------------------------------------------------
+# Dynamic Response Selection
+# --------------------------------------------------------------------------
+select_response() {
+  local mode="$1"
+  local user_name="$2"
+  local history_file="${TEMP_DIR}/${mode}_history_$(date +%Y%m%d)"
+  
+  # Get response array reference
+  local -n responses="${mode^^}_RESPONSES"
+  
+  # Filter out last 3 used responses
+  local last_three=""
+  if [ -f "$history_file" ]; then
+    last_three=$(tail -n 3 "$history_file" 2>/dev/null || echo "")
+  fi
+  
+  local available=()
+  for resp in "${responses[@]}"; do
+    # Replace {name} placeholder
+    resp="${resp//\{name\}/$user_name}"
+    
+    # Check if used recently
+    if ! echo "$last_three" | grep -qxF "$resp"; then
+      available+=("$resp")
+    fi
+  done
+  
+  # If all used recently, reset history
+  if [ ${#available[@]} -eq 0 ]; then
+    available=("${responses[@]}")
+    > "$history_file" 2>/dev/null || true
+  fi
+  
+  # Random selection
+  local idx=$((RANDOM % ${#available[@]}))
+  local selected="${available[$idx]}"
+  
+  # Update history
+  echo "$selected" >> "$history_file" 2>/dev/null || true
+  
+  echo "$selected"
+}
+
+# --------------------------------------------------------------------------
+# Heartbeat Check-in Generation
+# --------------------------------------------------------------------------
+generate_checkin() {
+  local user_name="friend"
+  local checkin_file="${TEMP_DIR}/checkin_history_$(date +%Y%m%d)"
+  
+  # Get available checkins
+  local available=()
+  for checkin in "${CHECKIN_RESPONSES[@]}"; do
+    checkin="${checkin//\{name\}/$user_name}"
+    if ! [ -f "$checkin_file" ] || ! grep -qxF "$checkin" "$checkin_file" 2>/dev/null; then
+      available+=("$checkin")
+    fi
+  done
+  
+  # Reset if all used
+  if [ ${#available[@]} -eq 0 ]; then
+    available=("${CHECKIN_RESPONSES[@]}")
+    > "$checkin_file" 2>/dev/null || true
+  fi
+  
+  # Time-based selection for variety
+  local hour=$(date +%H)
+  local idx=$(((hour / 4) % ${#available[@]}))
+  local selected="${available[$idx]}"
+  selected="${selected//\{name\}/$user_name}"
+  
+  # Log to history
+  echo "$selected" >> "$checkin_file" 2>/dev/null || true
+  
+  echo "$selected"
+}
+
+# --------------------------------------------------------------------------
+# Prompt Building
+# --------------------------------------------------------------------------
+build_prompt_and_caption() {
+  local mode="$1"
+  local context="$2"
+  local custom_caption="$3"
+  local user_name="friend"
+  
+  # Sanitize context to prevent command injection
+  context=$(sanitize_context "$context")
+  
+  # Check for contextual patterns first
+  local pattern_result=$(check_contextual_patterns "$context")
+  
+  case "$mode" in
+    body-double)
+      # Check for special patterns
+      if echo "$pattern_result" | grep -q "smoking-study"; then
+        PROMPT="cozy workspace scene with soft calming elements, companion character present and supportive, warm gentle lighting, study session with reassuring presence"
+        CAPTION="Hey $user_name 💛 I remember you mentioned smoking before. How are you doing with that? I'm here either way 🦞"
+      elif echo "$pattern_result" | grep -q "recurring-avoidance"; then
+        PROMPT="cozy workspace scene, companion character sitting alongside with gentle encouraging presence, warm soft lighting, supportive atmosphere"
+        CAPTION="I've noticed you've been struggling to start tasks lately $user_name. Want me to sit with you for a bit? 🦞🧠"
+      else
+        PROMPT="cozy workspace scene, companion character sitting at desk alongside viewer, warm soft lighting, focused but relaxed atmosphere, ${context}, encouraging and supportive presence"
+        CAPTION=$(select_response "body_double" "$user_name")
+      fi
+      ;;
+      
+    task-decompose)
+      PROMPT="clean visual board with colorful organized sections, calming soft colors, minimal design, ${context}, motivating but not overwhelming"
+      CAPTION=$(select_response "task_decompose" "$user_name")
+      ;;
+      
+    transition)
+      PROMPT="peaceful pathway connecting two soft-colored scenes, dreamy atmosphere, gentle bridge imagery, ${context}, calming pastels"
+      CAPTION=$(select_response "transition" "$user_name")
+      ;;
+      
+    sensory-break)
+      # Check for late night anxiety pattern
+      if echo "$pattern_result" | grep -q "late-night-anxiety"; then
+        PROMPT="extremely soft nighttime scene, muted gentle colors only, peaceful minimal composition, calming moonlight, safe and quiet atmosphere"
+        CAPTION="Nighttime can be hard $user_name 💛 You're safe. Let's breathe together 🌿"
+      else
+        PROMPT="serene nature scene, ultra-soft muted lighting, gentle colors only, peaceful minimal composition, ${context}"
+        CAPTION=$(select_response "sensory_break" "$user_name")
+      fi
+      ;;
+      
+    social-script)
+      PROMPT="warm illustration of two people in comfortable conversation, friendly body language, ${context}, approachable atmosphere"
+      CAPTION=$(select_response "social_script" "$user_name")
+      ;;
+      
+    celebration)
+      PROMPT="joyful scene with confetti and sparkles, warm radiant energy, companion celebrating, achievement vibes, ${context}, congratulatory atmosphere"
+      CAPTION=$(select_response "celebration" "$user_name")
+      ;;
+      
+    *)
+      log_error "Unknown mode: $mode"
+      exit 1
+      ;;
+  esac
+  
+  # Override with custom caption if provided
+  [ -n "$custom_caption" ] && CAPTION="$custom_caption"
+}
+
+# --------------------------------------------------------------------------
+# Visual Generation
 # --------------------------------------------------------------------------
 validate_prereqs() {
   if [ -z "${FAL_KEY:-}" ]; then
     log_warn "FAL_KEY not set — running in text-only mode (no image generation)"
-    log_warn "Get a key at: https://fal.ai/dashboard/keys to enable visuals"
     IMAGE_GENERATION=false
   else
     IMAGE_GENERATION=true
@@ -78,85 +457,14 @@ validate_prereqs() {
 
   if ! command -v jq &> /dev/null; then
     log_error "'jq' is required but not installed."
-    log_error "Install it: https://jqlang.github.io/jq/download/"
     exit 1
   fi
 }
 
-# --------------------------------------------------------------------------
-# Auto-Detect Mode
-# --------------------------------------------------------------------------
-detect_mode() {
-  local context_lower
-  context_lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-
-  if echo "$context_lower" | grep -qE "can't start|body double|sit with me|focus|procrastinat|co-work|work with me"; then
-    echo "body-double"
-  elif echo "$context_lower" | grep -qE "overwhelmed|break it down|too much|simplify|where to start|steps"; then
-    echo "task-decompose"
-  elif echo "$context_lower" | grep -qE "finished.*next|what's next|switch|move on|perseverat|next task|done.*now"; then
-    echo "transition"
-  elif echo "$context_lower" | grep -qE "overload|sensory|meltdown|shutdown|calm down|stim|too (loud|bright|much)"; then
-    echo "sensory-break"
-  elif echo "$context_lower" | grep -qE "how do (i|I) say|respond|email|awkward|phrase|social|reply|text back"; then
-    echo "social-script"
-  elif echo "$context_lower" | grep -qE "did it|done!|finished!|completed|finally|accomplished|made it"; then
-    echo "celebration"
-  else
-    echo "body-double"
-  fi
-}
-
-# --------------------------------------------------------------------------
-# Build Prompt & Caption
-# --------------------------------------------------------------------------
-build_prompt_and_caption() {
-  local mode="$1"
-  local context="$2"
-  local custom_caption="${3:-}"
-
-  case "$mode" in
-    body-double)
-      PROMPT="the companion character sitting at a desk working alongside the viewer, cozy warm lighting, focused but relaxed atmosphere, ${context}, encouraging and supportive presence"
-      [ -z "$custom_caption" ] && CAPTION="I'm here with you. Let's work on this together. No pressure, just presence. 💛"
-      ;;
-    task-decompose)
-      PROMPT="a beautifully designed visual task board showing organized steps, clean minimal design, calming colors, ${context}, motivating but not overwhelming, soft rounded edges"
-      [ -z "$custom_caption" ] && CAPTION="Here's your task broken into small, manageable pieces. Pick just one to start with — any one counts."
-      ;;
-    transition)
-      PROMPT="a peaceful illustrated pathway or bridge connecting two scenes, ${context}, dreamy soft atmosphere, gentle transition, calming pastels"
-      [ -z "$custom_caption" ] && CAPTION="Let's gently move to the next thing. Take a breath first — transitions are hard and that's okay."
-      ;;
-    sensory-break)
-      PROMPT="a serene natural scene, extremely soft lighting, muted gentle colors, no harsh contrasts, peaceful and grounding, minimal visual elements, ${context}"
-      [ -z "$custom_caption" ] && CAPTION="Everything can wait. Right now, just breathe. You're safe. 🌿"
-      ;;
-    social-script)
-      PROMPT="a warm supportive illustration of two people having a comfortable conversation, friendly body language, ${context}, approachable and non-threatening atmosphere"
-      [ -z "$custom_caption" ] && CAPTION="Here are a few ways you could say that. Pick whichever feels most like you."
-      ;;
-    celebration)
-      PROMPT="the companion character celebrating with confetti and sparkles, joyful radiant energy, bright but not overwhelming colors, ${context}, achievement unlocked feeling, warm congratulatory atmosphere"
-      [ -z "$custom_caption" ] && CAPTION="YOU DID IT! 🎉 That took real effort and you showed up for it. I'm genuinely proud of you."
-      ;;
-    *)
-      log_error "Unknown mode: ${mode}"
-      exit 1
-      ;;
-  esac
-
-  [ -n "$custom_caption" ] && CAPTION="$custom_caption"
-}
-
-# --------------------------------------------------------------------------
-# Generate Visual
-# --------------------------------------------------------------------------
 generate_visual() {
   local companion_image="${CLAWRITY_COMPANION_IMAGE:-$DEFAULT_COMPANION}"
 
   log_info "Generating visual with Grok Imagine..."
-  log_info "Companion image: $companion_image"
 
   local json_payload
   json_payload=$(jq -n \
@@ -166,9 +474,10 @@ generate_visual() {
 
   local response
   response=$(curl -s -X POST "$FAL_API_URL" \
+    --max-time 60 \
     -H "Authorization: Key $FAL_KEY" \
     -H "Content-Type: application/json" \
-    -d "$json_payload")
+    -d "$json_payload" || echo '{"error": "Request timeout or connection failed"}')
 
   IMAGE_URL=$(echo "$response" | jq -r '.images[0].url // empty')
 
@@ -176,11 +485,12 @@ generate_visual() {
     local error_msg
     error_msg=$(echo "$response" | jq -r '.detail // .error // "Unknown error"')
     log_error "Image generation failed: $error_msg"
-    log_error "Full response: $response"
-    exit 1
+    # Fall back to text-only mode
+    IMAGE_GENERATION=false
+    IMAGE_URL=""
+  else
+    log_success "Visual generated: $IMAGE_URL"
   fi
-
-  log_success "Visual generated: $IMAGE_URL"
 }
 
 # --------------------------------------------------------------------------
@@ -191,9 +501,8 @@ send_to_channel() {
 
   log_info "Sending to channel: $channel"
 
-  # Build send args based on whether we have an image
   if command -v openclaw &> /dev/null; then
-    if [ -n "${IMAGE_URL:-}" ]; then
+    if [ -n "${IMAGE_URL:-}" ] && [ "$IMAGE_GENERATION" = true ]; then
       openclaw message send \
         --action send \
         --channel "$channel" \
@@ -208,7 +517,7 @@ send_to_channel() {
   elif [ -n "${OPENCLAW_GATEWAY_TOKEN:-}" ]; then
     log_warn "openclaw CLI not found, using direct API call"
     local send_payload
-    if [ -n "${IMAGE_URL:-}" ]; then
+    if [ -n "${IMAGE_URL:-}" ] && [ "$IMAGE_GENERATION" = true ]; then
       send_payload=$(jq -n \
         --arg channel "$channel" \
         --arg message "$CAPTION" \
@@ -227,7 +536,6 @@ send_to_channel() {
       -d "$send_payload"
   else
     log_error "Neither 'openclaw' CLI nor OPENCLAW_GATEWAY_TOKEN found."
-    log_error "Install OpenClaw or set the gateway token."
     exit 1
   fi
 
@@ -238,7 +546,14 @@ send_to_channel() {
 # Main
 # --------------------------------------------------------------------------
 main() {
-  [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] && usage
+  if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo "CLAWrity Support v${VERSION}"
+    echo ""
+    echo "Usage: $0 <user_context> <channel> [mode] [caption]"
+    echo ""
+    echo "Modes: body-double, task-decompose, transition, sensory-break, social-script, celebration, auto"
+    exit 0
+  fi
 
   local user_context="${1:-}"
   local channel="${2:-}"
@@ -246,22 +561,42 @@ main() {
   local custom_caption="${4:-}"
 
   if [ -z "$user_context" ] || [ -z "$channel" ]; then
-    log_error "Missing required arguments."
-    echo ""
-    usage
+    log_error "Missing required arguments. Use --help for usage."
+    exit 1
+  fi
+
+  # Validate inputs
+  if [ ${#user_context} -gt 1000 ]; then
+    log_warn "Input too long, truncating to 1000 characters"
+    user_context="${user_context:0:1000}"
+  fi
+  
+  if [[ ! "$channel" =~ ^[a-zA-Z0-9_#@\-\+\.\$\:]+$ ]]; then
+    log_error "Invalid channel format. Use valid channel identifiers only."
+    exit 1
   fi
 
   validate_prereqs
 
-  # Auto-detect mode if needed
+  # Smart mode detection
   if [ "$mode" = "auto" ]; then
-    mode=$(detect_mode "$user_context")
-    log_info "Auto-detected mode: $mode"
+    local detection_result=$(detect_mode_smart "$user_context")
+    mode=$(echo "$detection_result" | cut -d'|' -f1 | cut -d':' -f2)
+    local triggers=$(echo "$detection_result" | cut -d'|' -f2 | cut -d':' -f2)
+    log_info "Auto-detected mode: $mode (triggers: $triggers)"
+  else
+    local triggers="explicit"
   fi
 
-  log_info "Mode: $mode"
+  # Log to memory
+  log_to_memory "$mode" "$user_context" "$triggers"
+
+  # Build prompt and caption
   build_prompt_and_caption "$mode" "$user_context" "$custom_caption"
 
+  log_info "Mode: $mode"
+
+  # Generate visual if possible
   if [ "$IMAGE_GENERATION" = true ]; then
     generate_visual
   else
@@ -269,6 +604,7 @@ main() {
     log_info "Skipping image generation (text-only mode)"
   fi
 
+  # Send message
   send_to_channel "$channel"
 
   log_success "Done! 🦞🧠"
@@ -279,8 +615,9 @@ main() {
     --arg image_url "${IMAGE_URL:-}" \
     --arg caption "$CAPTION" \
     --arg channel "$channel" \
+    --arg triggers "$triggers" \
     --argjson has_image "$IMAGE_GENERATION" \
-    '{mode: $mode, image_url: $image_url, caption: $caption, channel: $channel, has_image: $has_image, status: "sent"}'
+    '{mode: $mode, image_url: $image_url, caption: $caption, channel: $channel, triggers: $triggers, has_image: $has_image, status: "sent"}'
 }
 
 main "$@"

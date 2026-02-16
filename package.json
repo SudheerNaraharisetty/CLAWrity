@@ -1,6 +1,6 @@
 {
     "name": "clawrity",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "An OpenClaw skill for ADHD & Autism support — body doubling, task decomposition, sensory breaks, social scripting, and more",
     "bin": {
         "clawrity": "./bin/cli.js"
