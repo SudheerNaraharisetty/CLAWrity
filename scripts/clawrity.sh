@@ -564,6 +564,17 @@ main() {
     exit 1
   fi
 
+  # Validate inputs
+  if [ ${#user_context} -gt 1000 ]; then
+    log_warn "Input too long, truncating to 1000 characters"
+    user_context="${user_context:0:1000}"
+  fi
+  
+  if [[ ! "$channel" =~ ^[a-zA-Z0-9_#@\-\+\.\$\:]+$ ]]; then
+    log_error "Invalid channel format. Use valid channel identifiers only."
+    exit 1
+  fi
+
   validate_prereqs
 
   # Smart mode detection
