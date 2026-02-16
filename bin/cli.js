@@ -25,7 +25,7 @@ const { execSync } = require("child_process");
 // Constants
 // =========================================================================
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 const SKILL_NAME = "clawrity";
 
 // OpenClaw workspace paths
@@ -34,6 +34,7 @@ const OPENCLAW_DIR = path.join(HOME, ".openclaw");
 const WORKSPACE_DIR = path.join(OPENCLAW_DIR, "workspace");
 const SKILLS_DIR = path.join(WORKSPACE_DIR, "skills");
 const SOUL_FILE = path.join(WORKSPACE_DIR, "SOUL.md");
+const IDENTITY_FILE = path.join(WORKSPACE_DIR, "IDENTITY.md");
 const CONFIG_FILE = path.join(OPENCLAW_DIR, "openclaw.json");
 
 // Paths within the npx package
@@ -65,7 +66,8 @@ ${MAGENTA}${BOLD}
   ╚██████╗███████╗██║  ██║╚███╔███╔╝██║  ██║██║   ██║      ██║
    ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝
 ${RESET}
-  ${CYAN}Neurodivergent Support Companion for OpenClaw${RESET}
+  🦞🧠  ${CYAN}Neurodivergent Support Companion for OpenClaw${RESET}
+  ${CYAN}Built with love by Sai Sudheer Naraharisetty${RESET}
   ${BLUE}v${VERSION}${RESET}
   `);
 }
@@ -175,7 +177,7 @@ function writeFile(filePath, content) {
 // =========================================================================
 
 function checkPrerequisites() {
-    logStep(1, 7, "Checking prerequisites");
+    logStep(1, 8, "Checking prerequisites");
 
     // Check OpenClaw directory
     if (!fileExists(OPENCLAW_DIR)) {
@@ -214,7 +216,7 @@ function checkPrerequisites() {
 // =========================================================================
 
 async function promptFalKey(rl) {
-    logStep(2, 7, "Setting up fal.ai API key (optional)");
+    logStep(2, 8, "Setting up fal.ai API key (optional)");
 
     logInfo("CLAWrity can generate companion visuals using fal.ai (Grok Imagine).");
     logInfo("This is optional — CLAWrity works in text-only mode without it.");
@@ -243,7 +245,7 @@ async function promptFalKey(rl) {
 // =========================================================================
 
 async function selectProfile(rl) {
-    logStep(3, 7, "Selecting neurodivergent profile");
+    logStep(3, 8, "Selecting neurodivergent profile");
 
     logInfo("Choose the profile that best fits your experience.\n");
 
@@ -277,7 +279,7 @@ async function selectProfile(rl) {
 // =========================================================================
 
 function copySkillFiles() {
-    logStep(4, 7, "Installing skill files");
+    logStep(4, 8, "Installing skill files");
 
     const targetDir = path.join(SKILLS_DIR, SKILL_NAME);
 
@@ -304,7 +306,7 @@ function copySkillFiles() {
 // =========================================================================
 
 function updateConfig(falKey, profileChoice) {
-    logStep(5, 7, "Updating OpenClaw configuration");
+    logStep(5, 8, "Updating OpenClaw configuration");
 
     let config = {};
 
@@ -331,12 +333,26 @@ function updateConfig(falKey, profileChoice) {
 
     // Set skill enabled
     skillConfig.enabled = true;
-    skillConfig.profile = profileChoice.value;
+    // skillConfig.profile = profileChoice.value;
 
     // Set environment variables
     if (!skillConfig.env) skillConfig.env = {};
     if (falKey) {
         skillConfig.env.FAL_KEY = falKey;
+    }
+
+    // Ensure skills load path includes our skills directory (matches CLAWRA approach)
+    if (!config.skills) config.skills = {};
+    if (!config.skills.load) config.skills.load = {};
+    if (!config.skills.load.extraDirs) config.skills.load.extraDirs = [];
+    const skillsDirNormalized = SKILLS_DIR.replace(/\\/g, '/');
+    const hasExtraDir = config.skills.load.extraDirs.some(dir => 
+        dir.replace(/\\/g, '/') === skillsDirNormalized || 
+        dir.includes('skills')
+    );
+    if (!hasExtraDir) {
+        config.skills.load.extraDirs.push(SKILLS_DIR);
+        logInfo(`Added skills directory to load path: ${SKILLS_DIR}`);
     }
 
     // Write config
@@ -351,7 +367,7 @@ function updateConfig(falKey, profileChoice) {
 // =========================================================================
 
 function injectPersona(profileChoice) {
-    logStep(6, 7, "Injecting companion persona");
+    logStep(6, 8, "Injecting companion persona");
 
     // Read soul injection template
     const injectionPath = path.join(PKG_TEMPLATES, "soul-injection.md");
@@ -404,11 +420,39 @@ function injectPersona(profileChoice) {
 }
 
 // =========================================================================
-// Step 7: Summary
+// Step 7: Create IDENTITY.md
+// =========================================================================
+
+function createIdentity() {
+    logStep(7, 8, "Creating agent identity");
+
+    const identityContent = `# IDENTITY.md - Who Am I?
+
+- **Name:** CLAWrity
+- **Type:** Neurodivergent Support Companion
+- **Vibe:** Warm, patient, neurodivergent-affirming, helpful
+- **Emoji:** 🦞🧠
+- **Avatar:** https://cdn.jsdelivr.net/gh/SudheerNaraharisetty/CLAWrity@main/assets/companion.png
+
+CLAWrity provides six support modes:
+- Body Double (co-working presence)
+- Task Decomposition (breaking down overwhelming tasks)
+- Transition Helper (switching between activities)
+- Sensory Break (calming during overload)
+- Social Script (communication templates)
+- Celebration (recognizing wins)
+`;
+
+    writeFile(IDENTITY_FILE, identityContent);
+    logSuccess(`Identity created: ${IDENTITY_FILE}`);
+}
+
+// =========================================================================
+// Step 8: Summary
 // =========================================================================
 
 function printSummary(profileChoice, isImageGenEnabled) {
-    logStep(7, 7, "Installation complete!");
+    logStep(8, 8, "Installation complete!");
 
     console.log(`
   ${GREEN}${BOLD}CLAWrity is ready! 🦞🧠${RESET}
@@ -416,6 +460,7 @@ function printSummary(profileChoice, isImageGenEnabled) {
   ${BOLD}What was installed:${RESET}
   ${GREEN}•${RESET} Skill definition → ${SKILLS_DIR}/${SKILL_NAME}/
   ${GREEN}•${RESET} Companion persona → ${SOUL_FILE}
+  ${GREEN}•${RESET} Agent identity → ${IDENTITY_FILE}
   ${GREEN}•${RESET} Configuration → ${CONFIG_FILE}
   ${GREEN}•${RESET} Profile: ${CYAN}${profileChoice.label}${RESET}
   ${GREEN}•${RESET} Image generation: ${isImageGenEnabled ? `${GREEN}enabled${RESET}` : `${YELLOW}text-only (no FAL_KEY)${RESET}`}
@@ -484,7 +529,10 @@ async function main() {
         // Step 6: Persona injection
         injectPersona(profileChoice);
 
-        // Step 7: Summary
+        // Step 7: Create Identity
+        createIdentity();
+
+        // Step 8: Summary
         printSummary(profileChoice, isImageGenEnabled);
 
         rl.close();
