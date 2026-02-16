@@ -255,7 +255,7 @@ check_contextual_patterns() {
   # Check last 7 days of memory
   local recent_memory=""
   if [ -d "$MEMORY_DIR" ]; then
-    recent_memory=$(find "$MEMORY_DIR" -name "*.md" -mtime -7 -exec cat {} \; 2>/dev/null || echo "")
+    recent_memory=$(find "$MEMORY_DIR" -name "*.md" -mtime -7 -size -100k -exec head -c 10000 {} \; 2>/dev/null || echo "")
   fi
   
   # Pattern 1: Smoking + Study (as requested example)
@@ -296,7 +296,7 @@ check_contextual_patterns() {
 select_response() {
   local mode="$1"
   local user_name="$2"
-  local history_file="${TEMP_DIR}/${mode}_history_$$"
+  local history_file="${TEMP_DIR}/${mode}_history_$(date +%Y%m%d)"
   
   # Get response array reference
   local -n responses="${mode^^}_RESPONSES"
@@ -339,7 +339,7 @@ select_response() {
 # --------------------------------------------------------------------------
 generate_checkin() {
   local user_name="friend"
-  local checkin_file="${TEMP_DIR}/checkin_history"
+  local checkin_file="${TEMP_DIR}/checkin_history_$(date +%Y%m%d)"
   
   # Get available checkins
   local available=()
