@@ -474,9 +474,10 @@ generate_visual() {
 
   local response
   response=$(curl -s -X POST "$FAL_API_URL" \
+    --max-time 60 \
     -H "Authorization: Key $FAL_KEY" \
     -H "Content-Type: application/json" \
-    -d "$json_payload")
+    -d "$json_payload" || echo '{"error": "Request timeout or connection failed"}')
 
   IMAGE_URL=$(echo "$response" | jq -r '.images[0].url // empty')
 
