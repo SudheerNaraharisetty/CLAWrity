@@ -355,6 +355,18 @@ function updateConfig(falKey, profileChoice) {
         logInfo(`Added skills directory to load path: ${SKILLS_DIR}`);
     }
 
+    // Add heartbeat configuration for CLAWrity check-ins
+    if (!config.agents) config.agents = {};
+    if (!config.agents.defaults) config.agents.defaults = {};
+    if (!config.agents.defaults.heartbeat) {
+        config.agents.defaults.heartbeat = {
+            every: "4h",
+            target: "last",
+            prompt: "CLAWrity companion check-in: How is the user doing? Reference any previous struggles, wins, or patterns naturally. Be warm and brief."
+        };
+        logInfo("Enabled CLAWrity heartbeat check-ins (every 4 hours)");
+    }
+
     // Write config
     writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
     logSuccess(`Configuration saved to: ${CONFIG_FILE}`);
